@@ -1149,6 +1149,7 @@ class AppUI:
             self.monitor = MonitorService(self.snapshot, self._on_event, self.log,
                                           states=self.states)
         self._cancel_rearm_watch()
+        self._check_elevation_once()
         self.monitor = MonitorService(self.snapshot, self._on_event, self.log,
                                       states=self.states)
         self.monitor.start()
@@ -1160,6 +1161,32 @@ class AppUI:
                       self._rule()["warn"]["value"], self._rule()["alert"]["value"])
         if self.cfg["app"].get("show_overlay", True):
             self._show_overlay()
+
+    def _check_elevation_once(self) -> None:
+        """游戏以管理员运行时，非管理员进程无法注入按键：启动监控前提示一次。"""
+        if getattr(self, "_elevation_checked", False):
+            return
+        self._elevation_checked = True
+        emg = self._rule().get("emergency") or {}
+        if not emg.get("enabled"):
+            return
+        try:
+            from .capture import find_window
+            from .wininput import is_elevated, self_elevated, window_pid
+
+            snap = self.cfg.get("snapshot") or {}
+            hwnd = find_window(snap.get("window_title", ""), snap.get("process_name", ""))
+            if not hwnd:
+                return
+            pid = window_pid(hwnd)
+            if pid and is_elevated(pid) and not self_elevated():
+                messagebox.showwarning(
+                    "权限不一致，急停可能无效",
+                    "游戏正在以管理员身份运行，而本程序不是。\n"
+                    "这种情况下程序无法向游戏发送点击和按键，急停会失败。\n\n"
+                    "解决方式：关闭本程序，右键以「管理员身份运行」后重新开始监控。")
+        except Exception:
+            self.log.debug("权限检查失败", exc_info=True)
 
     def stop_monitor(self) -> None:
         self._cancel_rearm_watch()

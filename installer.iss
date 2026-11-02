@@ -2,8 +2,8 @@
 ; 编译：build_installer.bat（或 ISCC.exe installer.iss）
 
 #define MyAppName "屏幕数值监控"
-#define MyAppVersion "1.9.0"
-#define MyAppPublisher "本地自用"
+#define MyAppVersion "1.9.2"
+#define MyAppPublisher "ChengY"
 #define MyAppExeName "ScreenOcrAlert.exe"
 #define MyAppId "{{8B1C1D42-3F1E-4C77-9A55-2D6E6C2B7A10}"
 
@@ -11,13 +11,24 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-; 按用户安装，不需要管理员权限
+AppPublisherURL=https://github.com/alvg233/warframe-life-support-monitor
+AppSupportURL=https://github.com/alvg233/warframe-life-support-monitor/issues
+AppUpdatesURL=https://github.com/alvg233/warframe-life-support-monitor/releases
+; 按用户安装，不需要管理员权限；安装时会让用户选择"仅我"或"所有用户"
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={localappdata}\Programs\ScreenOcrAlert
 DefaultGroupName={#MyAppName}
+; 允许用户自己选择安装路径
+DisableDirPage=no
+DisableWelcomePage=no
+ShowLanguageDialog=no
 DisableProgramGroupPage=yes
+MinVersion=10.0
+CloseApplications=yes
+RestartApplications=no
 OutputDir=dist\installer
 OutputBaseFilename=ScreenOcrAlert-Setup-{#MyAppVersion}
 SetupIconFile=dist\app.ico
@@ -33,15 +44,17 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "chinesesimplified"; MessagesFile: "installer_lang\ChineseSimplified.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"
+; 默认勾选，用户可自行取消
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: checkedonce
+Name: "startmenu"; Description: "创建开始菜单快捷方式"; GroupDescription: "附加任务:"; Flags: checkedonce
 
 [Files]
 Source: "dist\ScreenOcrAlert\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "config.json,config.json.bak,logs\*,snapshots\*,startup.log,使用说明.txt"
 Source: "docs\使用说明.txt"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenu
+Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; Tasks: startmenu
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
