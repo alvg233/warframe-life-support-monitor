@@ -1,0 +1,26 @@
+# 运行时数据（含 Webhook/密钥，绝不入库）
+config.json
+config.json.bak
+logs/
+snapshots/
+*.bak
+portable.txt
+
+# 构建产物
+dist/
+build/
+*.spec.bak
+*.pyc
+__pycache__/
+**/__pycache__/
+
+# 依赖与本地环境
+.vendor/
+.venv/
+venv/
+
+# 编辑器与系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

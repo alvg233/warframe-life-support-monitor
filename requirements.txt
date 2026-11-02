@@ -1,0 +1,8 @@
+# 运行依赖（版本为本机验证过的组合，Python 3.13）
+rapidocr==3.10.0
+onnxruntime==1.31.1
+mss==10.2.0
+pillow==13.0.0
+requests==2.34.2
+pystray==0.19.5
+psutil==7.2.2
