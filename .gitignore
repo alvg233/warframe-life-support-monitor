@@ -24,3 +24,7 @@ venv/
 .idea/
 Thumbs.db
 desktop.ini
+
+# 令牌（绝不入库）
+.tokens.json
+tokens.json
