@@ -37,7 +37,10 @@ Warframe / 星际战甲 生存任务挂机辅助：定时识别屏幕左上角�
 
 ## 快速开始
 
-1. 下载并运行 `ScreenOcrAlert-Setup-x.y.z.exe`，按向导完成安装（当前用户目录，无需管理员权限）。
+下载安装包：[Gitee 发行版](https://gitee.com/alvg233/warframe-life-support-monitor/releases) ·
+[GitHub Releases](https://github.com/alvg233/warframe-life-support-monitor/releases)
+
+1. 运行 `Warframe-LifeSupport-Monitor-Setup-x.y.z.exe`，按向导完成安装（可选择安装路径、是否创建桌面与开始菜单快捷方式，默认创建）。
 2. 首次启动进入设置向导：
    - **选择窗口**：在列表中选中 `Warframe`，程序记录窗口标题与进程名。
    - **框选区域**：拖出矩形覆盖「维生系统」标签下方那一行百分比（含 `%` 号）。
