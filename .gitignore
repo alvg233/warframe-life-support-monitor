@@ -28,3 +28,6 @@ desktop.ini
 # 令牌（绝不入库）
 .tokens.json
 tokens.json
+
+# 发行版附件（不入库，单独上传）
+release/
