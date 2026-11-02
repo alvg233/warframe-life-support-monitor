@@ -3,9 +3,9 @@ chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-echo === 推送到 GitHub（需已在账号 alvg233 下创建空仓库 screen-ocr-alert） ===
+echo === 推送到 GitHub（需已在账号 alvg233 下创建空仓库 warframe-life-support-monitor） ===
 git remote remove github 2>nul
-git remote add github git@github.com:alvg233/screen-ocr-alert.git
+git remote add github git@github.com:alvg233/warframe-life-support-monitor.git
 git push -u github main
 if errorlevel 1 (
   echo.
@@ -18,7 +18,7 @@ echo GitHub 推送完成。
 echo.
 echo === 推送到 Gitee（需先在 Gitee 创建空仓库，并添加本机 SSH 公钥） ===
 git remote remove gitee 2>nul
-git remote add gitee git@gitee.com:alvg233/screen-ocr-alert.git
+git remote add gitee git@gitee.com:alvg233/warframe-life-support-monitor.git
 git push -u gitee main
 if errorlevel 1 (
   echo.
