@@ -2,7 +2,7 @@
 ; 编译：build_installer.bat（或 ISCC.exe installer.iss）
 
 #define MyAppName "屏幕数值监控"
-#define MyAppVersion "1.9.2"
+#define MyAppVersion "1.9.3"
 #define MyAppPublisher "ChengY"
 #define MyAppExeName "ScreenOcrAlert.exe"
 #define MyAppId "{{8B1C1D42-3F1E-4C77-9A55-2D6E6C2B7A10}"

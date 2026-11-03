@@ -210,14 +210,23 @@ class EmergencyStopper:
             img, _src = self.capture.grab_region_auto(region)
         except Exception as exc:
             self.log.debug("时间区域抓取失败: %s", exc)
+            self._time_miss = getattr(self, "_time_miss", 0) + 1
             return None, ""
         text = ""
-        # 时间区域使用检测器模式：rec_only 与后续检测调用共用同一引擎，实测会互相影响。
-        try:
-            _lines, text = self.ocr.recognize(img)
-        except Exception:
-            return None, text
-        return parse_clock(text), text
+        # 时间区域太小，检测器在 1x 下基本读不出；依次试 2x / 3x / 跳过检测器
+        for scale, rec_only in ((2.0, False), (3.0, False), (2.0, True)):
+            try:
+                _lines, candidate = self.ocr.recognize(img, scale=scale, rec_only=rec_only)
+            except Exception:
+                continue
+            if parse_clock(candidate) is not None:
+                text = candidate
+                break
+            if not text:
+                text = candidate
+        seconds = parse_clock(text)
+        self._time_miss = 0 if seconds is not None else getattr(self, "_time_miss", 0) + 1
+        return seconds, text
 
     def _read_value(self, rule: dict) -> float | None:
         num = rule.get("number") or {}

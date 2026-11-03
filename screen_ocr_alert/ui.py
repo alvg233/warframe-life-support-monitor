@@ -442,9 +442,11 @@ class AppUI:
                                            padx=(0 if i == 0 else 8, 4))
             ttk.Entry(tr, textvariable=v[key], width=7).grid(row=0, column=i * 2 + 1, sticky="w")
         ttk.Button(tr, text="框选时间区域", command=self.pick_time_region).grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Button(tr, text="自动定位时间", command=self.auto_locate_time).grid(
+            row=1, column=2, columnspan=2, sticky="w", pady=(8, 0))
         ttk.Button(tr, text="识别一次时间", command=self.test_time_ocr).grid(
-            row=1, column=3, columnspan=2, sticky="w", pady=(8, 0))
+            row=1, column=4, columnspan=2, sticky="w", pady=(8, 0))
 
         act = ttk.LabelFrame(tab, text=" 确认动作 ", padding=8)
         act.grid(row=3, column=0, columnspan=6, sticky="we", pady=(10, 0))
@@ -502,6 +504,32 @@ class AppUI:
             self.vars[key].set(f"{float(ratio.get(src, 0)):.3f}")
         self._save()
         self.test_time_ocr()
+
+    def auto_locate_time(self) -> None:
+        """在左上方大范围内自动找计时器那一行。"""
+        self._collect()
+        self._save()
+        threading.Thread(target=self._run_auto_locate_time, daemon=True).start()
+
+    def _run_auto_locate_time(self) -> None:
+        try:
+            self.monitor.prepare(self.snapshot())
+            rule = self._rule()
+            region = self.monitor.locate_time_region(rule)
+            if region:
+                self.events.put({"type": "time_region", "region": region})
+            else:
+                self.events.put({"type": "error",
+                                 "message": "没找到计时器，请先进入任务再点「自动定位时间」"})
+        except Exception as exc:
+            self.events.put({"type": "error", "message": f"自动定位失败: {exc}"})
+
+    def _apply_time_region(self, region: dict) -> None:
+        for key, src in (("t_x", "x"), ("t_y", "y"), ("t_w", "w"), ("t_h", "h")):
+            self.vars[key].set(f"{float(region.get(src, 0)):.3f}")
+        self._collect()
+        self._save()
+        self.events.put({"type": "notify", "message": "时间区域已自动定位并保存"})
 
     def _time_region(self) -> dict:
         v = self.vars
@@ -1403,6 +1431,10 @@ class AppUI:
 
             self.time_var.set(f"时间 {format_clock(evt.get('seconds'))}")
             self._last_time_text = format_clock(evt.get("seconds"))
+        elif kind == "time_region":
+            region = evt.get("region") or {}
+            if region:
+                self._apply_time_region(region)
         elif kind == "emergency_stage":
             self.last_event_var.set(f"急停：{evt.get('message', '')}")
             if evt.get("running"):

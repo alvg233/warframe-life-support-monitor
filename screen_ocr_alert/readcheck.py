@@ -72,16 +72,17 @@ class ReadGate:
 
     @staticmethod
     def _variants(img):
-        """先走"跳过检测器直接识别"（快 10 倍以上），失败再上检测器。
+        """识别变体，按"成功率从高到低"排列。
 
-        裁剪区域为单行或两行小块，检测器在此开销大且容易漏检。
+        实测（Warframe 生存 HUD，161x133 区域）：检测器 1x 完全检不出文字，
+        2x / 3x 稳定命中；rec_only 对该区域无效，仅作最后兜底。
         """
         from .ocr import enhance_contrast
 
-        yield img, 2.0, False          # 检测器先放大 2 倍：小字在 1x 下时好时坏
-        yield img, None, False
-        yield enhance_contrast(img), None, False
-        yield img, None, True          # 最后才用"跳过检测器"的兜底
+        yield img, 2.0, False
+        yield img, 3.0, False
+        yield enhance_contrast(img), 2.0, False
+        yield img, 2.5, True
         yield img, 2.0, True
 
     def _read_once(self, grab, rule) -> Attempt:

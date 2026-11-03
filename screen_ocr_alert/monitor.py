@@ -190,6 +190,25 @@ class MonitorService(threading.Thread):
                                traceback.format_exc())
                 self._emit({"type": "error", "message": "检查异常，详见日志"})
 
+        # 时间区域连续读不到：在左上方大范围内自动定位一次，交给界面更新配置
+        try:
+            stopper = self.emergency
+            if stopper is not None and not stopper.fired:
+                emg = (rules[0].get("emergency") or {}) if rules else {}
+                if (emg.get("enabled") and (emg.get("triggers") or {}).get("elapsed_minutes")
+                        and getattr(stopper, "_time_miss", 0) >= 5
+                        and time.time() - getattr(self, "_last_time_locate", 0.0) > 300):
+                    self._last_time_locate = time.time()
+                    located = self.locate_time_region(rules[0])
+                    if located:
+                        stopper._time_miss = 0
+                        self.log.info("已自动定位时间区域：%s", located)
+                        self._emit({"type": "time_region", "region": located})
+                        self._emit({"type": "error",
+                                    "message": "时间区域读取失败，已自动重新定位"})
+        except Exception:
+            self.log.debug("自动定位时间区域失败", exc_info=True)
+
     def _auto_locate(self, rule: dict) -> dict | None:
         """小框读不到时，在搜索区里找带 % 的那一行，换算成新的小框。"""
         from .numbers import parse_value
@@ -238,6 +257,69 @@ class MonitorService(threading.Thread):
             "h": round(min(1.0, ah / bh), 4),
         }
 
+    def locate_time_region(self, rule: dict,
+                           wide: dict | None = None) -> dict | None:
+        """在左上方大范围内找形如 mm:ss 的那一行，换算成时间区域。"""
+        from .numbers import parse_clock
+
+        zone = wide or {"mode": "ratio", "x": 0.0, "y": 0.08, "w": 0.5, "h": 0.45}
+        try:
+            img, _src = self.capture.grab_region_auto(zone)
+            lines, _text = self._ocr.recognize(img, scale=2.0)
+        except Exception:
+            self.log.debug("时间区域定位失败", exc_info=True)
+            return None
+
+        best = None
+        for line in lines:
+            if "%" in line.text:
+                continue
+            if parse_clock(line.text) is None:
+                continue
+            best = line
+            break
+        if best is None:
+            return None
+
+        x0, y0, x1, y1 = best.box
+        height = max(10.0, y1 - y0)
+        width = max(24.0, x1 - x0)                      # 整行，允许带上右侧水印
+        zpx = self.capture.region_pixels(zone)
+        bx, by, bw, bh = self.capture.base_rect()
+        if bw <= 0 or bh <= 0:
+            return None
+
+        candidates = []
+        for pad_scale, width_scale in ((0.5, 1.0), (0.9, 1.0), (0.5, 1.4)):
+            pad = height * pad_scale
+            cw = width * width_scale
+            ax0 = zpx["x"] + x0 - pad
+            ay0 = zpx["y"] + y0 - pad
+            rx = max(0.0, (ax0 - bx) / bw)
+            ry = max(0.0, (ay0 - by) / bh)
+            candidates.append({
+                "mode": "ratio",
+                "x": round(rx, 4),
+                "y": round(ry, 4),
+                "w": round(min(1.0 - rx, (cw + 2 * pad) / bw), 4),
+                "h": round(min(1.0 - ry, (height + 2 * pad) / bh), 4),
+            })
+
+        # 每个候选验 3 次，至少命中 2 次才采纳（定位点每次会略有偏移，必须挑稳住的那个）
+        for region in candidates:
+            hits = 0
+            for _ in range(3):
+                try:
+                    check, _src = self.capture.grab_region_auto(region)
+                    _l, text = self._ocr.recognize(check, scale=2.0)
+                except Exception:
+                    break
+                if parse_clock(text) is not None:
+                    hits += 1
+            if hits >= 2:
+                return region
+        return None
+
     # ---------- 单条规则 ----------
     def _check(self, rule: dict, cfg: dict, force: bool = False) -> None:
         sample = cfg.get("sample") or {}
@@ -246,7 +328,7 @@ class MonitorService(threading.Thread):
         st = self.state_of(rid)
         now = time.time()
 
-        region = st.learned_region or (rule.get("region") or {})
+        region = rule.get("region") or {}
         try:
             rw, rh = float(region.get("w", 0)), float(region.get("h", 0))
         except (TypeError, ValueError):
@@ -345,26 +427,21 @@ class MonitorService(threading.Thread):
         # 学到的位置也可能失效：失败就先丢弃它，用配置区域再试一次
         if not result.ok and st.learned_region is not None:
             st.learned_region = None
-            self._learn_tried = False
             region = rule.get("region") or {}
             result = self.reader.read(
                 grab=lambda: self.capture.grab_region_auto(region)[0],
                 rule=rule, last_value=st.value, elapsed=elapsed, quick=degraded)
 
-        # 读不到 -> 直接退到"搜索区"整块读（已验证可靠），成功后再把位置学回来
+
+        # 读不到时才用搜索区重试一次；失败时最多再花一轮，不做额外定位
         if not result.ok and not degraded:
             zone = rule.get("search_zone") or {}
-            if zone:
+            if zone and zone != region:
                 zres = self.reader.read(
                     grab=lambda: self.capture.grab_region_auto(zone)[0],
                     rule=rule, last_value=st.value, elapsed=elapsed)
                 if zres.ok:
-                    located = self._auto_locate(rule)
-                    st.learned_region = located or zone
-                    self.log.info("【%s】改用搜索区读取成功，区域纠正为 %s",
-                                  rule.get("name"), st.learned_region)
-                    self._emit({"type": "error",
-                                "message": "已自动切换到搜索区读取（位置已纠正）"})
+                    self.log.info("【%s】改用搜索区读取成功", rule.get("name"))
                     result = zres
 
         if not result.ok:
@@ -431,17 +508,6 @@ class MonitorService(threading.Thread):
         st.score = result.score
         self.policy.on_read(rule, st, result.value, result.text, result.score)
         st.last_read = now
-
-        # 首次读到数值后，把"搜索区"收敛成小框，后续每轮开销能降一个量级
-        if st.learned_region is None and not getattr(self, "_learn_tried", False):
-            self._learn_tried = True
-            try:
-                located = self._auto_locate(rule)
-                if located:
-                    st.learned_region = located
-                    self.log.info("【%s】已收敛识别区域：%s", rule.get("name"), located)
-            except Exception:
-                self.log.debug("收敛区域失败", exc_info=True)
 
     def calibrate(self, rule: dict) -> dict | None:
         """自动校准：找到那行百分比，再从"刚好包住"到"多留余量"逐级试，
