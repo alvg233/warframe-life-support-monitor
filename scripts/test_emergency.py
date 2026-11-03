@@ -179,6 +179,20 @@ def main() -> int:
           st8.check(rule8, 90.0) is None and st8._last_time == 12314.0,
           str(st8._last_time))
 
+    # 基线被读小（02:33）后，正常前进的计时值应被接受，而不是无限挂起
+    rule9 = make_rule(triggers={"zero_percent": False, "elapsed_minutes": True},
+                      elapsed_minutes=300)
+    rule9["emergency"]["time_region"] = {"mode": "ratio", "x": 0, "y": 0, "w": 0.1, "h": 0.1}
+    rule9["emergency"]["time_read_every_n"] = 1
+    st9 = EmergencyStopper(lambda: cfg, FakeCapture(),
+                           ScriptOcr(["时间 02:33", "时间 23:22", "时间 23:27"]),
+                           notify=None)
+    st9.check(rule9, 90.0)                       # 错误基线 153 秒
+    check("错误基线后大值先挂起", st9.check(rule9, 90.0) is None, str(st9._pending_time))
+    check("计时器正常前进即接受（不再卡在挂起）",
+          st9.check(rule9, 90.0) is None and st9._last_time == 1407.0,
+          str(st9._last_time))
+
     print("RESULT:", "ALL PASS" if ok else "HAS FAILURE")
     return 0 if ok else 1
 

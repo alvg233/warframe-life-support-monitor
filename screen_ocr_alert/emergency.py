@@ -159,15 +159,21 @@ class EmergencyStopper:
 
         if jump > allowed:
             # 可能是上一轮基线本身读错了（比如把 205:14 读成 05:02）。
-            # 先挂起，下一轮还是同一个值就认它是真的。
+            # 先挂起，下一轮只要"按计时器正常速度走到"就认它是真的。
             pending = getattr(self, "_pending_time", None)
-            if pending is not None and abs(seconds - pending) <= 3:
-                self._stage(f"时间 {format_clock(seconds)} 连续两轮一致，按真实值处理"
-                            f"（原基线 {format_clock(self._last_time)} 作废）")
-                self._last_time, self._last_time_at = seconds, now
-                self._pending_time = None
-                return seconds, text
+            pending_at = getattr(self, "_pending_at", 0.0)
+            if pending is not None:
+                since = max(0.0, now - pending_at)
+                progressed = 0.0 <= (seconds - pending) <= since + 8
+                same = abs(seconds - pending) <= 3
+                if progressed or same:
+                    self._stage(f"时间 {format_clock(seconds)} 与挂起值一致，按真实值处理"
+                                f"（原基线 {format_clock(self._last_time)} 作废）")
+                    self._last_time, self._last_time_at = seconds, now
+                    self._pending_time = None
+                    return seconds, text
             self._pending_time = seconds
+            self._pending_at = now
             self._stage(f"时间读数 {format_clock(seconds)} 比上一轮 "
                         f"{format_clock(self._last_time)} 涨得太多，先挂起等下一轮确认")
             if self.on_time:      # 挂起值也显示出来，别让界面回退成旧值
@@ -213,10 +219,10 @@ class EmergencyStopper:
             self._time_miss = getattr(self, "_time_miss", 0) + 1
             return None, ""
         text = ""
-        # 时间区域太小，检测器在 1x 下基本读不出；依次试 2x / 3x / 跳过检测器
-        for scale, rec_only in ((2.0, False), (3.0, False), (2.0, True)):
+        # 只用检测器模式。rec_only 与检测共用同一引擎，实测会让后续检测读不出文字。
+        for scale in (2.0, 4.0):
             try:
-                _lines, candidate = self.ocr.recognize(img, scale=scale, rec_only=rec_only)
+                _lines, candidate = self.ocr.recognize(img, scale=scale)
             except Exception:
                 continue
             if parse_clock(candidate) is not None:

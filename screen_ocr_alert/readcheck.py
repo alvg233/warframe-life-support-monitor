@@ -82,8 +82,7 @@ class ReadGate:
         yield img, 2.0, False
         yield img, 3.0, False
         yield enhance_contrast(img), 2.0, False
-        yield img, 2.5, True
-        yield img, 2.0, True
+        yield img, 4.0, False
 
     def _read_once(self, grab, rule) -> Attempt:
         return self._read_once_limited(grab, rule, None)

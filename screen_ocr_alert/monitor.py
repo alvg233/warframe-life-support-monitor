@@ -289,24 +289,21 @@ class MonitorService(threading.Thread):
         if bw <= 0 or bh <= 0:
             return None
 
-        candidates = []
-        for pad_scale, width_scale in ((0.5, 1.0), (0.9, 1.0), (0.5, 1.4)):
+        # 逐个候选验 3 次，必须 3 次全部命中才采纳（过小的框会时好时坏，实测 pad=0.5 只有 4/6）
+        for pad_scale, width_scale in ((1.0, 1.0), (1.5, 1.5), (0.5, 1.0)):
             pad = height * pad_scale
             cw = width * width_scale
             ax0 = zpx["x"] + x0 - pad
             ay0 = zpx["y"] + y0 - pad
             rx = max(0.0, (ax0 - bx) / bw)
             ry = max(0.0, (ay0 - by) / bh)
-            candidates.append({
+            region = {
                 "mode": "ratio",
                 "x": round(rx, 4),
                 "y": round(ry, 4),
                 "w": round(min(1.0 - rx, (cw + 2 * pad) / bw), 4),
                 "h": round(min(1.0 - ry, (height + 2 * pad) / bh), 4),
-            })
-
-        # 每个候选验 3 次，至少命中 2 次才采纳（定位点每次会略有偏移，必须挑稳住的那个）
-        for region in candidates:
+            }
             hits = 0
             for _ in range(3):
                 try:
@@ -316,7 +313,7 @@ class MonitorService(threading.Thread):
                     break
                 if parse_clock(text) is not None:
                     hits += 1
-            if hits >= 2:
+            if hits == 3:
                 return region
         return None
 
@@ -467,7 +464,8 @@ class MonitorService(threading.Thread):
             from .applog import samples_logger
 
             if log_samples:
-                samples_logger().info("fail  %s", (result.reason or "")[:32])
+                snippet = (result.text or "").replace("\n", " ")[:28]
+                samples_logger().info("fail  %s  %r", (result.reason or "")[:32], snippet)
             self.policy.on_failure(rule, st, result.reason or "未通过校验")
             return
 
